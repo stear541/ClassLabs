@@ -1,0 +1,78 @@
+#get latest code
+git clone https://github.com/ibm-developer-skills-network/fgskh-new_horizons.git
+
+#change directory to the downloaded code 
+cd fgskh-new_horizons
+
+#change into kubernetes docker installation folder
+cd kind
+
+#install the kubernetes in docker install tool
+./install_kind.sh
+
+#create a KIND Kubernetes Cluster running on top of docker
+./create_kind_cluster.sh
+
+#add alias for less typing
+alias k='kubectl'
+
+#install apache spark pod
+k apply -f ../spark/pod_spark.yaml -n default
+
+#make sure that we can interact with the kubernetes cluster from inside a POD
+k apply -f rbac.yaml -n default
+
+#check status of the Pod.  do this often
+k get po -n default
+
+#delete pod 
+k delete po spark -n default
+
+#enter the spark container of this Pod
+k exec  -n default -it spark -c spark  -- /bin/bash
+
+#following command submits the sparkPi sample application to the cluster
+./bin/spark-submit \
+--master k8s://http://127.0.0.1:8001 \
+--deploy-mode cluster \
+--name spark-pi \
+--class org.apache.spark.examples.SparkPi \
+--conf spark.executor.instances=3 \
+--conf spark.kubernetes.container.image=romeokienzler/spark-py:3.1.2 \
+--conf spark.kubernetes.executor.limit.cores=1 \
+local:///opt/spark/examples/jars/spark-examples_2.12-3.1.2.jar \
+10
+
+
+./bin/spark-submit is the command to submit applications to a Apache Spark cluster
+–master k8s://http://127.0.0.1:8001 is the address of the Kubernetes API server - the way kubectl but also the Apache Spark native Kubernetes scheduler interacts with the Kubernetes cluster
+–name spark-pi provides a name for the job and the subsequent Pods created by the Apache Spark native Kubernetes scheduler are prefixed with that name
+–class org.apache.spark.examples.SparkPi provides the canonical name for the Spark application to run (Java package and class name)
+–conf spark.executor.instances=1 tells the Apache Spark native Kubernetes scheduler how many Pods it has to create to parallelize the application. Note that on this single node development Kubernetes cluster increasing this number doesn’t make any sense (besides adding overhead for parallelization)
+–conf spark.kubernetes.container.image=romeokienzler/spark-py:3.1.2 tells the Apache Spark native Kubernetes scheduler which container image it should use for creating the driver and executor Pods. This image can be custom build using the provided Dockerfiles in kubernetes/dockerfiles/spark/ and bin/docker-image-tool.sh in the Apache Spark distribution
+–conf spark.kubernetes.executor.limit.cores=1 tells the Apache Spark native Kubernetes scheduler to set the CPU core limit to only use one core per executor Pod
+local:///opt/spark/examples/jars/spark-examples_2.12-3.1.2.jar indicates the jar file the application is contained in. Note that the local:// prefix addresses a path within the container images provided by the spark.kubernetes.container.image option. Since we’re using a jar provided by the Apache Spark distribution this is not a problem, otherwise the spark.kubernetes.file.upload.path option has to be set and an appropriate storage subsystem has to be configured, as described in the documentation
+10 tells the application to run for 10 iterations, then output the computed value of Pi
+
+#now in new terminal.  this will show additional Pods being created by the Apache Spark native Kubernetes scheduler 
+kubectl get po -n default
+
+NAME              READY STATUS    RESTARTS AGE
+spark             2/2   Running   0        28m
+spark-pi-X-exec-1 1/1   Running   0        33s
+spark-pi-X-exec-2 1/1   Running   0        33s
+spark-pi-X-exec-3 1/1   Running   0        33s
+spark-pi-X-driver 1/1   Running   0        44s
+spark-pi-Y-driver 0/1   Completed 0        12m
+
+#new terminal, check job elapsed time 
+kubectl logs -n default spark-pi-6f62d17a800beb3e-driver |grep "Job 0 finished:"
+
+#produces something like this
+Job 0 finished: reduce at SparkPi.scala:38, took 8.446024 s
+
+#see value for Pi the application came up with
+kubectl logs -n default spark-pi-6f62d17a800beb3e-driver |grep "Pi is roughly "
+
+#output is
+Pi is roughly 3.1416551416551415

@@ -1,0 +1,140 @@
+--Step 1: We add the database, host, port and the security mode details. A sample commmand is given for your reference below:
+db2cli writecfg add -database ***** -host ***** -port ***** -parameter "SecurityTransportMode=SSL"
+
+Step 2: We give a name to the data source we just created. This dsn name helps us to easily point to the IBM DB2 instance. A sample commmand is given for your reference below.
+db2cli writecfg add -dsn production -database ***** -host ***** -port *****
+
+--verify
+db2cli validate -dsn production -connect -user ***** -passwd *****
+
+--download schema file:
+wget https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DB0260EN-SkillsNetwork/labs/Populating%20a%20Data%20Warehouse/star-schema.sql
+
+--run command to create schema
+db2cli execsql -dsn production -user ***** -passwd ***** -inputsql star-schema.sql
+
+--download data files
+wget https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DB0260EN-SkillsNetwork/labs/Populating%20a%20Data%20Warehouse/DimCustomer.sql
+wget https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DB0260EN-SkillsNetwork/labs/Populating%20a%20Data%20Warehouse/DimMonth.sql
+wget https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DB0260EN-SkillsNetwork/labs/Populating%20a%20Data%20Warehouse/FactBilling.sql
+ls *.sql
+
+--load data in the data warehouse
+db2cli execsql -dsn production -user ***** -passwd ***** -inputsql DimCustomer.sql
+db2cli execsql -dsn production -user ***** -passwd ***** -inputsql DimMonth.sql
+db2cli execsql -dsn production -user ***** -passwd ***** -inputsql FactBilling.sql
+
+--download verification sql file
+wget https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-DB0260EN-SkillsNetwork/labs/Populating%20a%20Data%20Warehouse/verify.sql
+
+--verify data in database
+db2cli execsql -dsn production -user ***** -passwd ***** -inputsql verify.sql
+
+--open interactive sql command shell
+db2cli execsql -dsn production -user ***** -passwd *****
+
+select count(*) from DimMonth;
+
+--using cloud UI create simple MQT (like a MV)
+CREATE TABLE avg_customer_bill (customerid, averagebillamount) AS
+(select customerid, avg(billedamount)
+from factbilling
+group by customerid
+)
+     DATA INITIALLY DEFERRED
+     REFRESH DEFERRED
+     MAINTAINED BY SYSTEM;
+	 
+--refresh MQT
+refresh table avg_customer_bill;
+
+--find customers where average billing is more that 11000
+select * from avg_customer_bill where averagebillamount > 11000;
+
+
+--create a grouping set for three columns
+select year,category, sum(billedamount) as totalbilledamount
+from factbilling
+left join dimcustomer
+on factbilling.customerid = dimcustomer.customerid
+left join dimmonth
+on factbilling.monthid=dimmonth.monthid
+group by grouping sets(year,category)
+order by year, category
+
+--query with rollup
+select year,category, sum(billedamount) as totalbilledamount
+from factbilling
+left join dimcustomer
+on factbilling.customerid = dimcustomer.customerid
+left join dimmonth
+on factbilling.monthid=dimmonth.monthid
+group by rollup(year,category)
+order by year, category
+
+--cube
+select year,category, sum(billedamount) as totalbilledamount
+from factbilling
+left join dimcustomer
+on factbilling.customerid = dimcustomer.customerid
+left join dimmonth
+on factbilling.monthid=dimmonth.monthid
+group by cube(year,category)
+order by year, category
+
+---create MQT
+CREATE TABLE countrystats (country, year, totalbilledamount) AS
+  (select country, year, sum(billedamount)
+from factbilling
+left join dimcustomer
+on factbilling.customerid = dimcustomer.customerid
+left join dimmonth
+on factbilling.monthid=dimmonth.monthid
+group by country,year)
+     DATA INITIALLY DEFERRED
+     REFRESH DEFERRED
+     MAINTAINED BY SYSTEM;
+
+refresh table countrystats;
+
+
+--grouping set for year, quarter, sum
+select year, quartername, sum(billedamount) as totalbilledamount
+from factbilling
+left join dimcustomer
+on factbilling.customerid = dimcustomer.customerid
+left join dimmonth
+on factbilling.monthid=dimmonth.monthid
+group by grouping sets(year, quartername)
+
+--rollup for country, catgory, sum
+select country, category, sum(billedamount) as totalbilledamount
+from factbilling
+left join dimcustomer
+on factbilling.customerid = dimcustomer.customerid
+left join dimmonth
+on factbilling.monthid=dimmonth.monthid
+group by rollup(country,category)
+
+--cube year, country, category, sum
+select year,country, category, sum(billedamount) as totalbilledamount
+from factbilling
+left join dimcustomer
+on factbilling.customerid = dimcustomer.customerid
+left join dimmonth
+on factbilling.monthid=dimmonth.monthid
+group by cube(year,country, category)
+
+--Create an MQT with columns year, quarter, category, country, average_bill_amount
+CREATE TABLE average_billamount (year,quarter,category,country, average_bill_amount) AS
+    (select   year,quarter,category,country, avg(billedamount) as average_bill_amount
+    from factbilling
+    left join dimcustomer
+    on factbilling.customerid = dimcustomer.customerid
+    left join dimmonth
+    on factbilling.monthid=dimmonth.monthid
+    group by year,quarter,category,country
+    )
+     DATA INITIALLY DEFERRED
+     REFRESH DEFERRED
+     MAINTAINED BY SYSTEM;

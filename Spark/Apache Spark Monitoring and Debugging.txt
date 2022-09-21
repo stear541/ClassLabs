@@ -1,0 +1,101 @@
+--connect to Apache Spark user interface web server
+http://<driver-node>:4040
+
+--first download data
+wget https://cf-courses-data.s3.us.cloud-object-storage.appdomain.cloud/IBM-BD0225EN-SkillsNetwork/labs/data/cars.csv
+
+--stop any previously running containers
+for i in `docker ps | awk '{print $1}' | grep -v CONTAINER`; do docker kill $i; done
+
+--remove any previously used containers
+docker rm spark-master spark-worker-1 spark-worker-2
+
+--start the Spark Master server
+docker run \
+    --name spark-master \
+    -h spark-master \
+    -e ENABLE_INIT_DAEMON=false \
+    -p 4040:4040 \
+    -p 8080:8080 \
+    -v `pwd`:/home/root \
+    -d bde2020/spark-master:3.1.1-hadoop3.2
+
+--start a Spark Worker that will connect to the Master
+docker run \
+    --name spark-worker-1 \
+    --link spark-master:spark-master \
+    -e ENABLE_INIT_DAEMON=false \
+    -p 8081:8081 \
+    -v `pwd`:/home/root \
+    -d bde2020/spark-worker:3.1.1-hadoop3.2
+	
+--launch a PySpark shell in the running Spark Master container
+docker exec \
+    -it `docker ps | grep spark-master | awk '{print $1}'` \
+    /spark/bin/pyspark \
+    --master spark://spark-master:7077
+	
+--create a DataFrame in the shell
+df = spark.read.csv("/home/root/cars.csv", header=True, inferSchema=True) \
+    .repartition(32) \
+    .cache()
+df.show()
+
+--Define a user-defined function (UDF) to show engine type.
+from pyspark.sql.functions import udf
+import time
+
+@udf("string")
+def engine(cylinders):
+    time.sleep(0.2)  # Intentionally delay task
+    eng = {6: "V6", 8: "V8"}
+    return eng[cylinders]
+	
+--Add the UDF as a column in the DataFrame
+df = df.withColumn("engine", engine("cylinders"))
+
+--group the DataFrame by "cylinders" and aggregate other columns
+dfg = df.groupby("cylinders")
+dfa = dfg.agg({"mpg": "avg", "engine": "first"})
+dfa.show()
+
+--above fails by design.  next is to debug 
+
+--error is in the UDF.  Here's the fix
+@udf("string")
+def engine(cylinders):
+    time.sleep(0.2)  # Intentionally delay task
+    eng = {4: "inline-four", 6: "V6", 8: "V8"}
+    return eng.get(cylinders, "other")
+	
+--rerun the queries
+df = df.withColumn("engine", engine("cylinders"))
+dfg = df.groupby("cylinders")
+dfa = dfg.agg({"mpg": "avg", "engine": "first"})
+dfa.show()
+
+--once query completes you will see output similar to this 
++---------+------------------+-------------+                                    
+|cylinders|          avg(mpg)|first(engine)|
++---------+------------------+-------------+
+|        6|19.985714285714288|           V6|
+|        3|             20.55|        other|
+|        5|27.366666666666664|        other|
+|        4|29.286764705882348|  inline-four|
+|        8|14.963106796116506|           V8|
++---------+------------------+-------------+
+
+
+
+--add a second worker to the cluster with this command in new terminal
+docker run \
+    --name spark-worker-2 \
+    --link spark-master:spark-master \
+    -e ENABLE_INIT_DAEMON=false \
+    -p 8082:8082 \
+    -d bde2020/spark-worker:3.1.1-hadoop3.2
+	
+--in the PySpark terminal run the query again
+dfa.show()
+
+--check out the UI again, view event timeline.  you will see process ran faster with two workers 

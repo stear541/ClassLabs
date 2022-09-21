@@ -1,0 +1,37 @@
+--Hadoop Cluster
+
+--Clone repository to your theia env
+git clone https://github.com/ibm-developer-skills-network/ooxwv-docker_hadoop.git
+
+--navigate to the docker-hadoop directory to build it
+cd ooxwv-docker_hadoop
+
+-compose the docker application
+docker-compose up -d
+
+--run the namenode as a mounted drive on bash
+docker exec -it namenode /bin/bash
+
+--hadoop-env.sh Serves as a master file to configure YARN, HDFS, MapReduce, and Hadoop-related project settings.
+--core-site.xml Defines HDFS and Hadoop core properties
+--hdfs-site.xml Governs the location for storing node metadata, fsimage file and log file.
+--mapred-site-xml Lists the parameters for MapReduce configuration.
+--yarn-site.xml Defines settings relevant to YARN. It contains configurations for the Node Manager, Resource Manager, Containers, and Application Master.
+
+--these xml files have been configured already.  see directory here
+ls /opt/hadoop-3.2.1/etc/hadoop/*.xml
+
+--in the hdfs create a directory structure named input
+hdfs dfs -mkdir -p /user/root/input
+
+--copy all hadoop config xml files into the input directory
+hdfs dfs -put $HADOOP_HOME/etc/hadoop/*.xml /user/root/input
+
+--create a data.txt file in current directory
+curl https://raw.githubusercontent.com/ibm-developer-skills-network/ooxwv-docker_hadoop/master/SampleMapReduce.txt --output data.txt 
+
+--copy data.txt into /user/root/
+hdfs dfs -put data.txt /user/root/
+
+--check if copy successful
+hdfs dfs -cat /user/root/data.txt

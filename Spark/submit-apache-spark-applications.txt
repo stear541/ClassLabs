@@ -1,0 +1,45 @@
+#Install Apache Spark cluster using Docker Compose
+
+#install pyspark 
+pip3 install pyspark
+
+#get latest code 
+git clone https://github.com/big-data-europe/docker-spark.git
+
+#change directory to the downloaded code
+cd docker-spark
+
+#start the cluster
+docker-compose up
+
+#create a new python file called submit.py
+
+from pyspark import SparkContext, SparkConf
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructField, StructType, IntegerType, StringType
+
+sc = SparkContext.getOrCreate(SparkConf().setMaster('spark://localhost:7077'))
+sc.setLogLevel("INFO")
+
+spark = SparkSession.builder.getOrCreate()
+
+spark = SparkSession.builder.getOrCreate()
+df = spark.createDataFrame(
+    [
+        (1, "foo"),
+        (2, "bar"),
+    ],
+    StructType(
+        [
+            StructField("id", IntegerType(), False),
+            StructField("txt", StringType(), False),
+        ]
+    ),
+)
+print(df.dtypes)
+df.show()
+
+#time to execute script! in a new terminal
+python3 submit.py
+
+#launch application with port 8080 (spark master) or 8081

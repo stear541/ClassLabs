@@ -1,0 +1,231 @@
+IBM Cloudant Notes
+
+Documentation – https://cloud.ibm.com/docs/Cloudant 
+
+Training Content – https://cloud.ibm.com/docs/Cloudant?topic=Cloudant-learning-center 
+
+Support Resources – https://cloud.ibm.com/docs/get-support 
+
+--API Key
+*****
+
+--Username
+*****
+
+--password
+*****
+
+--host
+*****
+
+--URL  https://*****
+
+--Create Document
+{
+  "_id": "1",
+  "Topic" : "NoSQL Databases",
+  "Lesson" : "IBM Cloudant"
+}
+
+--query
+{
+   "selector": {}
+}
+
+--select all with id greater than 4
+{
+   "selector": {
+      "_id": {
+         "$gt": "4"
+      }
+   }
+}
+
+--select all less than id 4
+{
+   "selector": {
+      "_id": {
+         "$lt": "4"
+      }
+   }
+}
+
+--select price and square_feet for all docs
+{
+   "selector": {},
+   "fields": [
+      "_id",
+      "price",
+      "square_feet"
+   ]
+}
+
+--select fields id, bedroom, and price in docs with id greater than 2 sort by id
+
+{
+   "selector": {
+      "_id": {
+         "$gt": "2"
+      }
+   },
+   "fields": [
+      "_id",
+      "price",
+      "square_feet"
+   ],
+   "sort": [
+      {
+         "_id": "asc"
+      }
+   ]
+}
+
+--HTTP API
+
+--Cloudant URL
+export CLOUDANTURL="https://apikey-v2-*****"
+
+--connect to url
+curl $CLOUDANTURL
+
+--test credentials
+curl $CLOUDANTURL/_all_dbs
+
+--create a database
+curl -X PUT $CLOUDANTURL/animals
+
+--delete database
+curl -X DELETE $CLOUDANTURL/animals
+
+--insert a document into database planets (can also use POST in which id could be auto-generated)
+curl -X PUT $CLOUDANTURL/planets/"1" -d '{ 
+    "name" : "Mercury" ,
+    "position_from_sum" :1 
+     }'
+	 
+--select doc with id = 1
+curl -X GET $CLOUDANTURL/planets/1 
+
+--update doc (check rev number)
+curl -X PUT $CLOUDANTURL/planets/1 -d '{ 
+    "name" : "Mercury" ,
+    "position_from_sum" :1,
+    "revolution_time":"88 days",
+    "_rev":"1-473b9806b957558dd32d93615e94ec31"
+    }'
+
+--add another key to existing doc
+curl -X PUT $CLOUDANTURL/planets/1 -d '{
+    "name": "Mercury",
+    "position_from_sum": 1,
+    "revolution_time": "88 days",
+    "rotation_time": "59 days",
+    "_rev": "2-c82d0b7f587b2a90f7cb6f6d963b5486"
+}'
+
+--delete A Document
+curl -X DELETE $CLOUDANTURL/planets/1?rev=3-a6f41a3d464275e74cc75295c85b1162
+
+--query for diamond with id = 1
+curl -X POST $CLOUDANTURL/diamonds/_find \
+-H"Content-Type: application/json" \
+-d'{ 
+    "selector":
+        {
+            "_id":"1"
+        }
+    }'
+	
+--query diamond with carat size 0.03
+curl -X POST $CLOUDANTURL/diamonds/_find \
+-H"Content-Type: application/json" \
+-d'{ "selector":
+        {
+            "carat":0.3
+        }
+    }'
+
+--query for diamonds with price more than 345
+curl -X POST $CLOUDANTURL/diamonds/_find \
+-H"Content-Type: application/json" \
+-d'{ "selector":
+        {
+            "price":
+                {
+                    "$gt":345
+                }
+        }
+    }'
+
+curl -X POST $CLOUDANTURL/movies/_find \
+-H"Content-Type: application/json" \
+-d'{ "selector":
+        {
+            "Director":"Richard Gage"        }
+    }'
+	
+curl -X POST $CLOUDANTURL/movies/_find \
+-H"Content-Type: application/json" \
+-d'{
+   "selector": {
+      "title": "Top Dog"
+   },
+   "fields": [
+      "_id",
+      "year",
+      "Director"
+   ]
+}'
+
+--update price of diamond 2
+curl -X PUT $CLOUDANTURL/diamonds/2 -d '{ 
+    "_id": "2",
+    "_rev": "1-bb99032cde872d889f41bb4069e23675",
+    "carat": 0.2,
+    "cut": "Premium",
+    "color": "E",
+    "clarity": "SI2",
+    "depth": 60.2,
+    "table": 62,
+    "price": 352
+    }'
+
+	
+--create index on price
+curl -X POST $CLOUDANTURL/diamonds/_index \
+-H"Content-Type: application/json" \
+-d'{
+    "index": {
+        "fields": ["price"]
+    }
+}'	
+
+
+	
+--create json index on firstname
+curl -X POST $SERVERURL/employees/_index \
+-H"Content-Type: application/json" \
+-d'{
+    "index": {
+        "fields": ["firstname"]
+    }
+}'
+
+--create json index on firstname and name the index
+curl -X POST $SERVERURL/employees/_index \
+-H"Content-Type: application/json" \
+-d'{
+    "index": {
+        "fields": ["firstname"]
+    },
+    "name" : "firstname-index",
+    "type" : "json"
+}'
+
+--create text index on employees db
+curl -X POST $SERVERURL/employees/_index \
+-H"Content-Type: application/json" \
+-d'{ "index": {},
+     "type": "text"
+}'
+
